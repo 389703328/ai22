@@ -29,6 +29,8 @@ class KnowledgeItemCreate(BaseModel):
 
     title: str = Field(..., max_length=200)
     content: str
+    file_path: Optional[str] = None
+    file_name: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
     enabled: bool = True
 
@@ -38,6 +40,8 @@ class KnowledgeItemUpdate(BaseModel):
 
     title: Optional[str] = Field(None, max_length=200)
     content: Optional[str] = None
+    file_path: Optional[str] = None
+    file_name: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
     enabled: Optional[bool] = None
 
@@ -49,6 +53,8 @@ class KnowledgeItemResponse(BaseModel):
     knowledge_base_id: int
     title: str
     content: str
+    file_path: Optional[str] = None
+    file_name: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
     enabled: bool
     created_time: datetime

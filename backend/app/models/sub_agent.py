@@ -9,6 +9,7 @@ class SubAgentBase(BaseModel):
     name: str = Field(..., max_length=200, description="子智能体名称")
     description: Optional[str] = Field(None, description="子智能体描述")
     prompt: str = Field(..., description="子智能体提示词")
+    api_key: Optional[str] = Field(None, description="API密钥（可选）")
     status: str = Field("draft", max_length=20, description="状态: active, inactive, draft")
 
 
@@ -22,6 +23,7 @@ class SubAgentUpdate(BaseModel):
     name: Optional[str] = Field(None, max_length=200)
     description: Optional[str] = None
     prompt: Optional[str] = None
+    api_key: Optional[str] = None
     status: Optional[str] = Field(None, max_length=20)
 
 

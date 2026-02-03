@@ -59,7 +59,7 @@ export const useAIExpertStore = defineStore('aiExpert', {
           ...(this.filters.category && { category: this.filters.category })
         }
         
-        const response = await api.get('/ai/experts', { params })
+        const response = await api.get('/ai/experts/', { params })
         this.experts = response.data.items || []
         this.total = response.data.total || 0
         this.page = response.data.page || 1
@@ -77,7 +77,7 @@ export const useAIExpertStore = defineStore('aiExpert', {
      */
     async fetchCategories() {
       try {
-        const response = await api.get('/ai/experts/categories')
+        const response = await api.get('/ai/experts/categories/')
         this.categories = response.data.items || []
       } catch (err) {
         console.error('获取分类失败:', err)
@@ -89,7 +89,7 @@ export const useAIExpertStore = defineStore('aiExpert', {
      */
     async fetchExpertById(id) {
       try {
-        const response = await api.get(`/ai/experts/${id}`)
+        const response = await api.get(`/ai/experts/${id}/`)
         return response.data
       } catch (err) {
         this.error = err.response?.data?.detail || '获取专家详情失败'
@@ -104,7 +104,7 @@ export const useAIExpertStore = defineStore('aiExpert', {
      */
     async createExpert(expertData) {
       try {
-        const response = await api.post('/ai/experts', expertData)
+        const response = await api.post('/ai/experts/', expertData)
         await this.fetchExperts()
         return response.data
       } catch (err) {
@@ -118,7 +118,7 @@ export const useAIExpertStore = defineStore('aiExpert', {
      */
     async updateExpert(id, expertData) {
       try {
-        const response = await api.put(`/ai/experts/${id}`, expertData)
+        const response = await api.put(`/ai/experts/${id}/`, expertData)
         await this.fetchExperts()
         return response.data
       } catch (err) {
@@ -132,7 +132,7 @@ export const useAIExpertStore = defineStore('aiExpert', {
      */
     async deleteExpert(id) {
       try {
-        await api.delete(`/ai/experts/${id}`)
+        await api.delete(`/ai/experts/${id}/`)
         await this.fetchExperts()
         return { success: true }
       } catch (err) {

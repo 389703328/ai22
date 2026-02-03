@@ -30,6 +30,8 @@ class SkillItemCreate(BaseModel):
     name: str = Field(..., max_length=200)
     description: Optional[str] = None
     content: str
+    file_path: Optional[str] = None
+    file_name: Optional[str] = None
     category: Optional[str] = Field(None, max_length=100)
     tags: List[str] = []
     enabled: bool = True
@@ -41,6 +43,8 @@ class SkillItemUpdate(BaseModel):
     name: Optional[str] = Field(None, max_length=200)
     description: Optional[str] = None
     content: Optional[str] = None
+    file_path: Optional[str] = None
+    file_name: Optional[str] = None
     category: Optional[str] = Field(None, max_length=100)
     tags: Optional[List[str]] = None
     enabled: Optional[bool] = None
@@ -54,6 +58,8 @@ class SkillItemResponse(BaseModel):
     name: str
     description: Optional[str] = None
     content: str
+    file_path: Optional[str] = None
+    file_name: Optional[str] = None
     category: Optional[str] = None
     tags: List[str] = []
     enabled: bool

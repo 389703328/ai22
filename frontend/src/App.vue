@@ -12,8 +12,8 @@
         router
         :collapse="false"
         background-color="#ffffff"
-        text-color="#606266"
-        active-text-color="#409EFC"
+        text-color="#475569"
+        active-text-color="#2563eb"
       >
         <el-menu-item index="/">
           <el-icon><House /></el-icon>
@@ -25,14 +25,24 @@
           <span>用户管理</span>
         </el-menu-item>
         
-        <el-menu-item index="/ai">
-          <el-icon><ChatDotRound /></el-icon>
-          <span>AI 智能对话</span>
-        </el-menu-item>
-        
         <el-menu-item index="/ai-experts">
           <el-icon><Collection /></el-icon>
-          <span>专家模型库</span>
+          <span>专家管理</span>
+        </el-menu-item>
+
+        <el-menu-item index="/mcp">
+          <el-icon><Tools /></el-icon>
+          <span>MCP管理</span>
+        </el-menu-item>
+
+        <el-menu-item index="/models">
+          <el-icon><Setting /></el-icon>
+          <span>模型管理</span>
+        </el-menu-item>
+        
+        <el-menu-item index="/ai">
+          <el-icon><ChatDotRound /></el-icon>
+          <span>AI 对话</span>
         </el-menu-item>
       </el-menu>
 
@@ -76,7 +86,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { House, User, ChatDotRound, Collection } from '@element-plus/icons-vue'
+import { House, User, ChatDotRound, Collection, Tools, Setting } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const activePath = computed(() => route.path)
@@ -86,30 +96,22 @@ const currentRouteName = computed(() => {
     case '/': return '系统首页';
     case '/users': return '用户管理';
     case '/ai': return 'AI 智能对话';
-    case '/ai-experts': return '专家模型管理';
-    default: return '当前页面';
+    case '/ai-experts': return '专家管理';
+    case '/mcp': return 'MCP工具管理';
+    case '/models': return '模型配置';
+    default: 
+      if (route.path.startsWith('/ai-experts/')) return '专家详情';
+      return '当前页面';
   }
 })
 </script>
 
 <style>
 :root {
-  --el-color-primary: #409EFC;
-  --header-height: 60px;
+  --el-color-primary: var(--primary);
+  --el-color-primary-light-3: var(--primary-light);
+  --header-height: 56px;
   --aside-width: 240px;
-}
-
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  background-color: #f0f2f5;
-  color: #303133;
 }
 
 .layout-container {
@@ -117,80 +119,80 @@ body {
   display: flex;
 }
 
-/* Sidebar Styles */
 .aside-menu {
-  background-color: #ffffff;
-  border-right: 1px solid #dcdfe6;
+  background: var(--bg-card);
+  border-right: 1px solid var(--border-light);
   display: flex;
   flex-direction: column;
-  box-shadow: 2px 0 8px 0 rgba(29, 35, 41, 0.05);
+  box-shadow: var(--shadow-sm);
   z-index: 10;
-  transition: width 0.3s;
+  transition: width var(--transition);
 }
 
 .logo-container {
   height: var(--header-height);
   display: flex;
   align-items: center;
-  padding-left: 20px;
-  border-bottom: 1px solid #f0f0f0;
+  padding-left: var(--space-6);
+  border-bottom: 1px solid var(--border-light);
 }
 
 .logo-icon {
-  font-size: 28px;
-  margin-right: 12px;
+  font-size: 24px;
+  margin-right: var(--space-3);
 }
 
 .logo-text {
-  font-weight: 600;
-  font-size: 18px;
-  color: #303133;
-  letter-spacing: 0.5px;
+  font-weight: var(--font-semibold);
+  font-size: var(--text-lg);
+  color: var(--text-primary);
+  letter-spacing: 0.02em;
 }
 
 .el-menu-vertical {
   border-right: none !important;
   flex: 1;
-  padding-top: 10px;
+  padding-top: var(--space-2);
 }
 
 .el-menu-item {
-  margin: 4px 8px;
-  border-radius: 4px;
-  height: 50px;
-  line-height: 50px;
+  margin: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  height: 44px;
+  line-height: 44px;
+  font-size: var(--text-sm);
 }
 
 .el-menu-item.is-active {
-  background-color: #ecf5ff;
-  font-weight: 600;
+  background: var(--primary-light);
+  color: var(--primary);
+  font-weight: var(--font-semibold);
 }
 
 .el-menu-item:hover {
-  background-color: #f5f7fa;
+  background: var(--bg-hover);
 }
 
 .menu-footer {
-  padding: 20px;
+  padding: var(--space-5);
   text-align: center;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--border-light);
 }
 
 .version-text {
-  font-size: 12px;
-  color: #909399;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
 }
 
-/* Header Styles */
 .main-header {
-  background-color: #ffffff;
-  border-bottom: 1px solid #dcdfe6;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
   height: var(--header-height) !important;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 24px;
-  box-shadow: 0 1px 4px rgba(0,21,41,0.08);
+  padding: 0 var(--space-6);
+  box-shadow: var(--shadow-sm);
   position: relative;
   z-index: 9;
 }
@@ -199,31 +201,31 @@ body {
   display: flex;
   align-items: center;
   cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 4px;
-  transition: background 0.3s;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  transition: background var(--transition);
 }
 
 .header-right .user-info:hover {
-  background: #f5f7fa;
+  background: var(--bg-hover);
 }
 
 .user-avatar {
-  background-color: #409EFC;
+  background: var(--primary);
   color: white;
-  margin-right: 8px;
-  font-size: 12px;
+  margin-right: var(--space-2);
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
 }
 
 .admin-name {
-  font-size: 14px;
-  font-weight: 500;
-  color: #606266;
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--text-secondary);
 }
 
-/* Main Content Styles */
 .main-body {
-  background-color: #f0f2f5;
+  background: var(--bg-page);
   padding: 0 !important;
   display: flex;
   flex-direction: column;
@@ -232,21 +234,20 @@ body {
 
 .main-content-wrapper {
   flex: 1;
-  padding: 24px;
-  max-width: 1600px;
+  padding: var(--space-6);
+  max-width: 1400px;
   width: 100%;
   margin: 0 auto;
 }
 
 .main-footer {
   text-align: center;
-  color: #909399;
-  font-size: 12px;
-  padding: 20px 0;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  padding: var(--space-5) 0;
   height: auto !important;
 }
 
-/* Transitions */
 .fade-enter-active,
 .fade-leave-active {
   transition: opacity 0.2s ease;

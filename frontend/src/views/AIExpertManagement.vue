@@ -2,172 +2,187 @@
   <div class="ai-expert-management">
     <!-- 页面头部 -->
     <div class="page-header">
-      <h1>AI专家管理</h1>
-      <button class="btn btn-primary" @click="handleCreateNew">+ 新建专家</button>
+      <div class="header-content">
+        <h1>AI专家管理</h1>
+        <p class="subtitle">管理和配置您的AI专家智能体，定义其行为与核心提示词</p>
+      </div>
+      <el-button type="primary" size="large" @click="handleCreateNew">
+        <el-icon class="el-icon--left"><Plus /></el-icon>新建专家
+      </el-button>
     </div>
 
     <!-- 搜索和筛选区域 -->
-    <div class="search-filter-box">
-      <div class="search-group">
-        <input
-          v-model="localFilters.keyword"
-          type="text"
-          placeholder="搜索专家名称或编码..."
-          class="search-input"
-          @input="handleSearchInput"
-        />
+    <el-card class="filter-card" shadow="hover">
+      <el-form :inline="true" :model="localFilters" class="search-form">
+        <el-form-item label="关键词">
+          <el-input
+            v-model="localFilters.keyword"
+            placeholder="搜索专家名称或编码..."
+            clearable
+            @input="handleSearchInput"
+            style="width: 240px"
+          >
+            <template #prefix>
+              <el-icon><Search /></el-icon>
+            </template>
+          </el-input>
+        </el-form-item>
         
-        <select v-model="localFilters.status" class="filter-select" @change="handleFilterChange">
-          <option value="">全部状态</option>
-          <option value="active">激活</option>
-          <option value="inactive">停用</option>
-          <option value="draft">草稿</option>
-        </select>
+        <el-form-item label="状态">
+          <el-select v-model="localFilters.status" placeholder="全部状态" clearable @change="handleFilterChange" style="width: 140px">
+            <el-option label="激活" value="active" />
+            <el-option label="停用" value="inactive" />
+            <el-option label="草稿" value="draft" />
+          </el-select>
+        </el-form-item>
 
-        <input
-          v-model="localFilters.category"
-          list="categoryOptions"
-          type="text"
-          placeholder="全部分类"
-          class="filter-select"
-          @input="handleFilterChange"
-        />
-        <datalist id="categoryOptions">
-          <option v-for="item in categories" :key="item" :value="item" />
-        </datalist>
+        <el-form-item label="分类">
+          <el-autocomplete
+            v-model="localFilters.category"
+            :fetch-suggestions="queryCategorySearch"
+            placeholder="全部分类"
+            clearable
+            @select="handleFilterChange"
+            @input="handleFilterChange"
+            style="width: 180px"
+          />
+        </el-form-item>
 
-        <button class="btn btn-secondary" @click="handleReset">重置</button>
-        <button class="btn btn-secondary" @click="handleRefresh" :disabled="loading">
-          {{ loading ? '加载中...' : '刷新' }}
-        </button>
-      </div>
-    </div>
-
-    <!-- 加载中状态 -->
-    <div v-if="loading" class="loading-box">
-      <div class="spinner"></div>
-      <p>加载中...</p>
-    </div>
+        <el-form-item class="filter-actions">
+          <el-button @click="handleReset">重置</el-button>
+          <el-button type="primary" plain @click="handleRefresh" :loading="loading">
+            <el-icon class="el-icon--left"><Refresh /></el-icon>刷新
+          </el-button>
+        </el-form-item>
+      </el-form>
+    </el-card>
 
     <!-- 错误提示 -->
-    <div v-if="error" class="error-box">
-      <p>❌ {{ error }}</p>
-      <button class="btn btn-secondary" @click="error = ''">关闭</button>
-    </div>
-
-    <!-- 空数据提示 -->
-    <div v-if="!loading && experts.length === 0 && !error" class="empty-box">
-      <p>暂无数据</p>
-    </div>
+    <el-alert v-if="error" :title="error" type="error" show-icon @close="error = ''" style="margin-bottom: 20px" />
 
     <!-- 数据表格 -->
-    <div v-if="!loading && experts.length > 0" class="table-container">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>编码</th>
-            <th>名称</th>
-            <th>分类</th>
-            <th>状态</th>
-            <th>版本</th>
-            <th>使用次数</th>
-            <th>创建时间</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="expert in experts" :key="expert.id" class="data-row">
-            <td>{{ expert.id }}</td>
-            <td class="code-cell">{{ expert.code }}</td>
-            <td>{{ expert.name }}</td>
-            <td><span v-if="expert.category" class="tag">{{ expert.category }}</span></td>
-            <td>
-              <select :value="expert.status" class="status-select" @change="handleStatusChange(expert.id, $event)">
-                <option value="active">激活</option>
-                <option value="inactive">停用</option>
-                <option value="draft">草稿</option>
-              </select>
-            </td>
-            <td>{{ expert.version }}</td>
-            <td>{{ expert.usage_count }}</td>
-            <td class="time-cell">{{ formatDate(expert.created_time) }}</td>
-            <td class="action-cell">
-              <button class="btn btn-sm btn-secondary" @click="handleManage(expert.id)">管理</button>
-              <button class="btn btn-sm btn-info" @click="handleEdit(expert)">编辑</button>
-              <button class="btn btn-sm btn-danger" @click="handleDelete(expert.id)">删除</button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+    <el-card class="table-card" shadow="never">
+      <el-table v-loading="loading" :data="experts" border stripe>
+        <el-table-column type="index" label="序号" width="80" />
+        <el-table-column prop="code" label="编码" width="150">
+          <template #default="{ row }">
+            <el-tag type="info" size="small">{{ row.code }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="name" label="名称" width="180" show-overflow-tooltip />
+        <el-table-column prop="category" label="分类" width="120">
+          <template #default="{ row }">
+            <el-tag v-if="row.category" effect="plain" size="small">{{ row.category }}</el-tag>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="状态" width="100">
+          <template #default="{ row }">
+            <el-tag 
+              :type="row.status === 'active' ? 'success' : row.status === 'inactive' ? 'info' : 'warning'"
+            >
+              {{ row.status === 'active' ? '激活' : row.status === 'inactive' ? '停用' : '草稿' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="version" label="版本" width="100" />
+        <el-table-column prop="usage_count" label="使用次数" width="120" sortable />
+        <el-table-column prop="created_by" label="创建人" width="120" />
+        <el-table-column prop="created_time" label="创建时间" width="180">
+          <template #default="{ row }">
+            {{ formatDate(row.created_time) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" fixed="right" width="260">
+          <template #default="{ row }">
+            <el-button link type="primary" @click="handleManage(row.id)">管理</el-button>
+            <el-button link type="primary" @click="handleEdit(row)">编辑</el-button>
+            <el-button link type="danger" @click="handleDelete(row.id)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
 
       <!-- 分页 -->
-      <div class="pagination-box">
-        <span>共 {{ total }} 条 | 第 {{ page }}/{{ totalPages }} 页</span>
-        <div class="pagination-controls">
-          <button :disabled="page === 1" class="btn btn-secondary" @click="page > 1 && store.setPage(page - 1)">上一页</button>
-          <button :disabled="page === totalPages" class="btn btn-secondary" @click="page < totalPages && store.setPage(page + 1)">下一页</button>
-          <select @change="store.setPageSize(parseInt($event.target.value))">
-            <option value="10">10条/页</option>
-            <option value="20">20条/页</option>
-            <option value="50">50条/页</option>
-          </select>
-        </div>
-      </div>
-    </div>
+      <el-pagination
+        v-model:current-page="store.page"
+        v-model:page-size="store.pageSize"
+        :total="total"
+        :page-sizes="[10, 20, 50, 100]"
+        layout="total, sizes, prev, pager, next, jumper"
+        @size-change="store.setPageSize"
+        @current-change="store.setPage"
+        style="margin-top: 20px; justify-content: flex-end"
+      />
+    </el-card>
 
     <!-- 创建/编辑对话框 -->
-    <div v-if="showDialog" class="dialog-overlay" @click="showDialog = false">
-      <div class="dialog-box" @click.stop>
-        <div class="dialog-header">
-          <h2>{{ isEditMode ? '编辑专家' : '新建专家' }}</h2>
-          <button class="close-btn" @click="showDialog = false">&times;</button>
-        </div>
-        <form @submit.prevent="handleSaveForm" class="dialog-form">
-          <div class="form-group">
-            <label>编码 *</label>
-            <input v-model="formData.code" type="text" required />
-          </div>
-          <div class="form-group">
-            <label>名称 *</label>
-            <input v-model="formData.name" type="text" required />
-          </div>
-          <div class="form-group">
-            <label>核心提示词 *</label>
-            <textarea v-model="formData.prompt" required rows="5"></textarea>
-          </div>
-          <div class="form-group">
-            <label>分类</label>
-            <input v-model="formData.category" list="formCategoryOptions" type="text" placeholder="可自定义" />
-            <datalist id="formCategoryOptions">
-              <option v-for="item in categories" :key="item" :value="item" />
-            </datalist>
-          </div>
-          <div class="form-group">
-            <label>状态</label>
-            <select v-model="formData.status">
-              <option value="draft">草稿</option>
-              <option value="active">激活</option>
-              <option value="inactive">停用</option>
-            </select>
-          </div>
-          <div class="form-group" v-if="!isEditMode">
-            <label>创建人 *</label>
-            <input v-model="formData.created_by" type="text" required />
-          </div>
-          <div class="dialog-footer">
-            <button type="button" class="btn btn-secondary" @click="showDialog = false">取消</button>
-            <button type="submit" class="btn btn-primary">保存</button>
-          </div>
-        </form>
-      </div>
-    </div>
+    <el-dialog
+      v-model="showDialog"
+      :title="isEditMode ? '编辑专家' : '新建专家'"
+      width="600px"
+      align-center
+    >
+      <el-form :model="formData" label-position="top" label-width="100px" class="dialog-form">
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="专家编码" required>
+              <el-input 
+                v-model="formData.code" 
+                placeholder="唯一标识码 (例如: code_assistant)" 
+                :disabled="isEditMode" 
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="专家名称" required>
+              <el-input v-model="formData.name" placeholder="显示名称" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-form-item label="分类">
+          <el-autocomplete
+            v-model="formData.category"
+            :fetch-suggestions="queryCategorySearch"
+            placeholder="选择或输入分类 (例如: 编程, 写作)"
+            style="width: 100%"
+          />
+        </el-form-item>
+
+        <el-form-item label="核心提示词 (System Prompt)" required>
+          <el-input 
+            v-model="formData.prompt" 
+            type="textarea" 
+            :rows="6" 
+            placeholder="定义专家的核心人设、行为准则和回复风格..."
+          />
+        </el-form-item>
+        
+        <el-form-item label="初始状态">
+          <el-radio-group v-model="formData.status">
+            <el-radio label="draft">草稿</el-radio>
+            <el-radio label="active">激活</el-radio>
+            <el-radio label="inactive">停用</el-radio>
+          </el-radio-group>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="showDialog = false">取消</el-button>
+          <el-button type="primary" @click="handleSaveForm">
+            {{ isEditMode ? '保存修改' : '立即创建' }}
+          </el-button>
+        </span>
+      </template>
+    </el-dialog>
+
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { Search, Plus, Refresh, Setting, Edit, Delete } from '@element-plus/icons-vue'
 import { useAIExpertStore } from '../stores/aiExpert'
 
 const store = useAIExpertStore()
@@ -254,6 +269,11 @@ const handleManage = (id) => {
   router.push(`/ai-experts/${id}`)
 }
 
+const queryCategorySearch = (queryString, cb) => {
+  const results = categories.value.map(cat => ({ value: cat }))
+  cb(queryString ? results.filter(i => i.value.toLowerCase().includes(queryString.toLowerCase())) : results)
+}
+
 const handleDelete = async (id) => {
   if (!confirm('确定要删除该专家吗？')) return
   try {
@@ -264,9 +284,9 @@ const handleDelete = async (id) => {
   }
 }
 
-const handleStatusChange = async (id, event) => {
+const handleStatusChange = async (id, val) => {
   try {
-    await store.updateExpertStatus(id, event.target.value)
+    await store.updateExpertStatus(id, val)
     error.value = ''
   } catch (err) {
     error.value = '状态更新失败: ' + (err.message || '未知错误')
@@ -291,10 +311,8 @@ const handleSaveForm = async () => {
 onMounted(async () => {
   loading.value = true
   try {
-    console.log('Mounting AIExpertManagement, fetching data...')
     await store.fetchCategories()
     await store.fetchExperts()
-    console.log('Data fetched:', store.experts)
     error.value = ''
   } catch (err) {
     console.error('Error fetching data:', err)
@@ -306,542 +324,64 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-* {
-  box-sizing: border-box;
-}
-
 .ai-expert-management {
-  width: 100%;
+  max-width: 100%;
 }
 
 .page-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 32px;
-  animation: slideDown 0.5s ease-out;
-}
-
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.page-header h1 {
-  margin: 0;
-  font-size: 32px;
-  font-weight: 700;
-  background: linear-gradient(135deg, #1E3C72 0%, #2A5298 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-.btn {
-  padding: 10px 24px;
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.btn-primary {
-  background: linear-gradient(135deg, #1E3C72 0%, #2A5298 100%);
-  color: white;
-  box-shadow: 0 4px 15px rgba(30, 60, 114, 0.4);
-}
-
-.btn-primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(30, 60, 114, 0.6);
-}
-
-.btn-primary:active {
-  transform: translateY(0);
-}
-
-.btn-secondary {
-  background: #f0f2f5;
-  color: #333;
-  border: 1px solid #e0e0e0;
-}
-
-.btn-secondary:hover {
-  background: #e8e8e8;
-  transform: translateY(-1px);
-}
-
-.btn-info {
-  background: #3498db;
-  color: white;
-}
-
-.btn-danger {
-  background: #e74c3c;
-  color: white;
-}
-
-.btn-sm {
-  padding: 6px 12px;
-  font-size: 12px;
-}
-
-.btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none !important;
-}
-
-/* 搜索和筛选 */
-.search-filter-box {
-  background: white;
-  padding: 24px;
-  border-radius: 12px;
   margin-bottom: 24px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-  animation: slideUp 0.5s ease-out 0.1s both;
 }
 
-@keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.header-content h1 {
+  font-size: 30px !important;
+  font-weight: 700 !important;
+  margin: 0 0 8px 0;
+  color: var(--el-text-color-primary);
 }
 
-.search-group {
+.subtitle {
+  color: var(--el-text-color-secondary);
+  font-size: 14px;
+  margin: 0;
+}
+
+.filter-card {
+  margin-bottom: 24px;
+}
+
+.filter-actions {
+  margin-left: auto;
+}
+
+.search-form {
   display: flex;
-  gap: 12px;
   flex-wrap: wrap;
-  align-items: center;
-}
-
-.search-input,
-.filter-select {
-  padding: 10px 14px;
-  border: 1.5px solid #e0e0e0;
-  border-radius: 8px;
-  font-size: 14px;
-  font-family: inherit;
-  transition: all 0.3s ease;
-}
-
-.search-input {
-  min-width: 200px;
-  flex: 1;
-}
-
-.search-input:focus,
-.filter-select:focus {
-  outline: none;
-  border-color: #1E3C72;
-  box-shadow: 0 0 0 3px rgba(30, 60, 114, 0.1);
-}
-
-.filter-select {
-  min-width: 120px;
-  background: white;
-  cursor: pointer;
-}
-
-/* 加载和错误 */
-.loading-box,
-.error-box,
-.empty-box {
-  background: white;
-  padding: 60px 40px;
-  border-radius: 12px;
-  margin-bottom: 24px;
-  text-align: center;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-}
-
-.loading-box {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 20px;
-}
-
-.spinner {
-  width: 40px;
-  height: 40px;
-  border: 4px solid #f0f0f0;
-  border-top: 4px solid #1E3C72;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-.loading-box p,
-.empty-box p {
-  font-size: 16px;
-  color: #666;
-  margin: 0;
-}
-
-.error-box {
-  background: linear-gradient(135deg, #fff5f5 0%, #ffe0e0 100%);
-  color: #c53030;
-  border: 1.5px solid #fc8181;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 20px;
-  padding: 20px 24px;
-}
-
-.error-box p {
-  margin: 0;
-  font-size: 14px;
-}
-
-/* 表格 */
-.table-container {
-  background: white;
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-  margin-bottom: 24px;
-  animation: slideUp 0.5s ease-out 0.2s both;
-}
-
-.data-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
-}
-
-.data-table thead {
-  background: linear-gradient(135deg, #f5f7fa 0%, #f0f0f5 100%);
-  border-bottom: 2px solid #e8e8f0;
-}
-
-.data-table th {
-  padding: 16px 12px;
-  text-align: left;
-  font-weight: 600;
-  color: #333;
-  white-space: nowrap;
-}
-
-.data-table td {
-  padding: 14px 12px;
-  border-bottom: 1px solid #f0f0f0;
-  vertical-align: middle;
-}
-
-.data-row {
-  transition: all 0.3s ease;
-}
-
-.data-row:hover {
-  background: #f8f9ff;
-  box-shadow: inset 0 0 0 1px #f0f0ff;
-}
-
-.code-cell {
-  font-family: 'Monaco', 'Courier', monospace;
-  color: #1E3C72;
-  font-weight: 500;
-}
-
-.time-cell {
-  color: #999;
-  font-size: 12px;
-}
-
-.tag {
-  display: inline-block;
-  background: linear-gradient(135deg, #cce5ff 0%, #e0d5ff 100%);
-  color: #0c5aa0;
-  padding: 6px 10px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 500;
-  white-space: nowrap;
-}
-
-.status-select {
-  padding: 6px 10px;
-  border: 1.5px solid #e0e0e0;
-  border-radius: 6px;
-  font-size: 12px;
-  font-family: inherit;
-  background: white;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.status-select:focus {
-  outline: none;
-  border-color: #1E3C72;
-}
-
-.action-cell {
-  display: flex;
-  gap: 8px;
-}
-
-/* 分页 */
-.pagination-box {
-  background: white;
-  padding: 20px 24px;
-  border-radius: 12px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-  animation: slideUp 0.5s ease-out 0.3s both;
-}
-
-.pagination-info {
-  font-size: 14px;
-  color: #666;
-  font-weight: 500;
-}
-
-.pagination-controls {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
-.pagination-controls select {
-  padding: 8px 12px;
-  border: 1.5px solid #e0e0e0;
-  border-radius: 6px;
-  font-size: 12px;
-  background: white;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-/* 对话框 */
-.dialog-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.4);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-  backdrop-filter: blur(4px);
-  animation: fadeIn 0.3s ease-out;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-.dialog-box {
-  background: white;
-  border-radius: 12px;
-  width: 90%;
-  max-width: 600px;
-  max-height: 90vh;
-  overflow-y: auto;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-  animation: scaleIn 0.3s ease-out;
-}
-
-@keyframes scaleIn {
-  from {
-    opacity: 0;
-    transform: scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-.dialog-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 24px;
-  border-bottom: 1px solid #f0f0f0;
-  background: linear-gradient(135deg, #f5f7fa 0%, #f0f0f5 100%);
-}
-
-.dialog-header h2 {
-  margin: 0;
-  font-size: 20px;
-  color: #333;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 32px;
-  cursor: pointer;
-  color: #999;
-  transition: all 0.3s ease;
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-}
-
-.close-btn:hover {
-  background: rgba(0, 0, 0, 0.05);
-  color: #333;
-}
-
-.dialog-form {
-  padding: 24px;
-}
-
-.form-group {
-  margin-bottom: 20px;
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: 8px;
-  font-weight: 500;
-  color: #333;
-  font-size: 14px;
-}
-
-.form-group input,
-.form-group textarea,
-.form-group select {
-  width: 100%;
-  padding: 10px 12px;
-  border: 1.5px solid #e0e0e0;
-  border-radius: 8px;
-  font-size: 14px;
-  font-family: inherit;
-  transition: all 0.3s ease;
-  background: white;
-}
-
-.form-group input:focus,
-.form-group textarea:focus,
-.form-group select:focus {
-  outline: none;
-  border-color: #1E3C72;
-  box-shadow: 0 0 0 3px rgba(30, 60, 114, 0.1);
-}
-
-.form-group textarea {
-  resize: vertical;
-  min-height: 80px;
-}
-
-.dialog-footer {
-  display: flex;
-  justify-content: flex-end;
   gap: 12px;
-  padding-top: 20px;
-  margin-top: 20px;
-  border-top: 1px solid #f0f0f0;
 }
 
-/* 响应式 */
-@media (max-width: 768px) {
-  .ai-expert-management {
-    padding: 0;
-  }
+.table-card {
+  margin-bottom: 24px;
+  min-height: 400px;
+}
 
-  .page-header {
-    flex-direction: column;
-    gap: 16px;
-    align-items: flex-start;
-    margin-bottom: 24px;
-  }
+.table-card :deep(.table-header-cell) {
+  background-color: var(--el-fill-color-light) !important;
+  color: var(--el-color-primary);
+}
 
-  .page-header h1 {
-    font-size: 24px;
-    width: 100%;
-  }
+/* 状态颜色 */
+.status-select-active :deep(.el-input__inner) {
+  color: var(--el-color-success);
+}
 
-  .btn {
-    width: 100%;
-    justify-content: center;
-  }
+.status-select-inactive :deep(.el-input__inner) {
+  color: var(--el-color-info);
+}
 
-  .search-filter-box {
-    padding: 16px;
-  }
-
-  .search-group {
-    flex-direction: column;
-  }
-
-  .search-input,
-  .filter-select {
-    width: 100%;
-  }
-
-  .data-table {
-    font-size: 12px;
-  }
-
-  .data-table th,
-  .data-table td {
-    padding: 10px 8px;
-  }
-
-  .pagination-box {
-    flex-direction: column;
-    gap: 16px;
-    align-items: flex-start;
-  }
-
-  .pagination-controls {
-    width: 100%;
-    flex-direction: column;
-  }
-
-  .pagination-controls button,
-  .pagination-controls select {
-    width: 100%;
-  }
-
-  .dialog-box {
-    width: 95%;
-  }
-
-  .action-cell {
-    flex-direction: column;
-  }
-
-  .action-cell .btn {
-    width: 100%;
-    padding: 8px 12px;
-    font-size: 12px;
-  }
+.status-select-draft :deep(.el-input__inner) {
+  color: var(--el-color-warning);
 }
 </style>

@@ -1,226 +1,423 @@
 <template>
-  <div class="users">
-    <h1>User Management</h1>
-    
-    <div v-if="loading" class="loading">Loading users...</div>
-    <div v-else-if="error" class="error">{{ error }}</div>
-    
-    <div class="user-list">
-      <div v-for="user in users" :key="user.id" class="user-card">
-        <h3>{{ user.username }}</h3>
-        <p>{{ user.email }}</p>
-        <small>ID: {{ user.id }}</small>
+  <div class="users-container">
+    <div class="page-header">
+      <div class="header-content">
+        <h1>用户管理</h1>
+        <p class="subtitle">管理系统用户及其权限配置</p>
       </div>
+      <el-button type="primary" size="large" @click="showCreateDialog">新建用户</el-button>
     </div>
-    
-    <button @click="fetchUsers" class="btn">Refresh Users</button>
+
+    <!-- 搜索和筛选 -->
+    <el-card class="search-card" shadow="never">
+      <el-form :inline="true">
+        <el-form-item label="关键词">
+          <el-input v-model="searchParams.keyword" placeholder="用户名/邮箱/姓名" clearable @clear="fetchUsers" />
+        </el-form-item>
+        <el-form-item label="角色">
+          <el-select v-model="searchParams.role" placeholder="全部" clearable @change="fetchUsers">
+            <el-option label="管理员" value="admin" />
+            <el-option label="普通用户" value="user" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="状态">
+          <el-select v-model="searchParams.status" placeholder="全部" clearable @change="fetchUsers">
+            <el-option label="启用" value="active" />
+            <el-option label="禁用" value="inactive" />
+          </el-select>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="fetchUsers">搜索</el-button>
+        </el-form-item>
+      </el-form>
+    </el-card>
+
+    <!-- 用户表格 -->
+    <el-card class="table-card" shadow="never">
+      <el-table v-loading="loading" :data="users" border stripe>
+        <el-table-column type="index" label="序号" width="80" />
+        <el-table-column prop="username" label="用户名" width="150" />
+        <el-table-column prop="real_name" label="真实姓名" width="120" />
+        <el-table-column prop="email" label="邮箱" width="200" />
+        <el-table-column prop="phone" label="手机号" width="130" />
+        <el-table-column label="角色" width="100">
+          <template #default="{ row }">
+            <el-tag :type="row.role === 'admin' ? 'danger' : 'primary'">
+              {{ row.role === 'admin' ? '管理员' : '普通用户' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="状态" width="100">
+          <template #default="{ row }">
+            <el-tag :type="row.status === 'active' ? 'success' : 'info'">
+              {{ row.status === 'active' ? '启用' : '禁用' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="created_time" label="创建时间" width="180">
+          <template #default="{ row }">
+            {{ formatDate(row.created_time) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" fixed="right" width="260">
+          <template #default="{ row }">
+            <el-button link type="primary" @click="editUser(row)">编辑</el-button>
+            <el-button link type="warning" @click="managePermissions(row)">权限</el-button>
+            <el-button link type="danger" @click="deleteUser(row)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <!-- 分页 -->
+      <el-pagination
+        v-model:current-page="pagination.page"
+        v-model:page-size="pagination.pageSize"
+        :total="pagination.total"
+        :page-sizes="[10, 20, 50, 100]"
+        layout="total, sizes, prev, pager, next, jumper"
+        @size-change="fetchUsers"
+        @current-change="fetchUsers"
+        style="margin-top: 20px; justify-content: flex-end"
+      />
+    </el-card>
+
+    <!-- 创建/编辑对话框 -->
+    <el-dialog
+      v-model="dialogVisible"
+      :title="isEdit ? '编辑用户' : '新建用户'"
+      width="600px"
+      @close="resetForm"
+    >
+      <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
+        <el-form-item label="用户名" prop="username">
+          <el-input v-model="form.username" :disabled="isEdit" placeholder="请输入用户名" />
+        </el-form-item>
+        <el-form-item label="密码" :prop="isEdit ? '' : 'password'">
+          <el-input
+            v-model="form.password"
+            type="password"
+            maxlength="72"
+            show-word-limit
+            :placeholder="isEdit ? '留空则不修改密码' : '请输入密码（6-72字符）'"
+            show-password
+          />
+        </el-form-item>
+        <el-form-item label="真实姓名" prop="real_name">
+          <el-input v-model="form.real_name" placeholder="请输入真实姓名" />
+        </el-form-item>
+        <el-form-item label="邮箱" prop="email">
+          <el-input v-model="form.email" placeholder="请输入邮箱" />
+        </el-form-item>
+        <el-form-item label="手机号" prop="phone">
+          <el-input v-model="form.phone" placeholder="请输入手机号" />
+        </el-form-item>
+        <el-form-item label="角色" prop="role">
+          <el-select v-model="form.role" placeholder="请选择角色">
+            <el-option label="管理员" value="admin" />
+            <el-option label="普通用户" value="user" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="状态" prop="status">
+          <el-select v-model="form.status" placeholder="请选择状态">
+            <el-option label="启用" value="active" />
+            <el-option label="禁用" value="inactive" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="dialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="submitting" @click="submitForm">确定</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 权限管理对话框 -->
+    <el-dialog v-model="permissionDialogVisible" title="权限管理" width="800px">
+      <el-tabs v-model="activePermissionTab">
+        <el-tab-pane label="专家权限" name="expert">
+          <el-checkbox-group v-model="permissions.expert_ids">
+            <el-checkbox v-for="expert in availableExperts" :key="expert.id" :label="expert.id">
+              {{ expert.name }}
+            </el-checkbox>
+          </el-checkbox-group>
+        </el-tab-pane>
+        <el-tab-pane label="MCP工具" name="mcp">
+          <el-checkbox-group v-model="permissions.mcp_ids">
+            <el-checkbox v-for="mcp in availableMCPs" :key="mcp.id" :label="mcp.id">
+              {{ mcp.name }}
+            </el-checkbox>
+          </el-checkbox-group>
+        </el-tab-pane>
+      </el-tabs>
+      <template #footer>
+        <el-button @click="permissionDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="submitting" @click="savePermissions">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
-<script>
-import { useUserStore } from '../stores/user.js'
-import { storeToRefs } from 'pinia'
+<script setup>
+import { ref, reactive, onMounted } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import api from '../services/api.js'
 
-export default {
-  name: 'Users',
-  setup() {
-    const userStore = useUserStore()
-    const { users, loading, error } = storeToRefs(userStore)
-    
-    const fetchUsers = () => {
-      userStore.fetchUsers()
+const loading = ref(false)
+const submitting = ref(false)
+const users = ref([])
+const dialogVisible = ref(false)
+const permissionDialogVisible = ref(false)
+const isEdit = ref(false)
+const formRef = ref(null)
+const activePermissionTab = ref('expert')
+const currentUser = ref(null)
+
+const searchParams = reactive({
+  keyword: '',
+  role: '',
+  status: ''
+})
+
+const pagination = reactive({
+  page: 1,
+  pageSize: 10,
+  total: 0
+})
+
+const form = reactive({
+  username: '',
+  password: '',
+  real_name: '',
+  email: '',
+  phone: '',
+  role: 'user',
+  status: 'active'
+})
+
+const permissions = reactive({
+  expert_ids: [],
+  subagent_ids: [],
+  mcp_ids: [],
+  skill_ids: [],
+  knowledge_ids: []
+})
+
+const availableExperts = ref([])
+const availableMCPs = ref([])
+
+const rules = {
+  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
+  password: [
+    { required: true, message: '请输入密码', trigger: 'blur' },
+    { min: 6, message: '密码长度不能少于 6 个字符', trigger: 'blur' },
+    { max: 72, message: '密码长度不能超过 72 个字符', trigger: 'blur' }
+  ],
+  role: [{ required: true, message: '请选择角色', trigger: 'change' }],
+  status: [{ required: true, message: '请选择状态', trigger: 'change' }]
+}
+
+const formatDate = (dateStr) => {
+  if (!dateStr) return '-'
+  return new Date(dateStr).toLocaleString('zh-CN')
+}
+
+const fetchUsers = async () => {
+  loading.value = true
+  try {
+    const { data } = await api.get('/users/', {
+      params: {
+        page: pagination.page,
+        page_size: pagination.pageSize,
+        ...searchParams
+      }
+    })
+    users.value = data.items
+    pagination.total = data.total
+  } catch (error) {
+    ElMessage.error('获取用户列表失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+const showCreateDialog = () => {
+  isEdit.value = false
+  dialogVisible.value = true
+}
+
+const editUser = (row) => {
+  isEdit.value = true
+  currentUser.value = row
+  Object.assign(form, {
+    username: row.username,
+    password: '',
+    real_name: row.real_name,
+    email: row.email,
+    phone: row.phone,
+    role: row.role,
+    status: row.status
+  })
+  dialogVisible.value = true
+}
+
+const resetForm = () => {
+  if (formRef.value) {
+    formRef.value.resetFields()
+  }
+  Object.assign(form, {
+    username: '',
+    password: '',
+    real_name: '',
+    email: '',
+    phone: '',
+    role: 'user',
+    status: 'active'
+  })
+  currentUser.value = null
+}
+
+const submitForm = async () => {
+  if (!formRef.value) return
+  await formRef.value.validate(async (valid) => {
+    if (!valid) return
+
+    submitting.value = true
+    try {
+      const payload = { ...form }
+      if (isEdit.value && !payload.password) {
+        delete payload.password
+      }
+
+      if (isEdit.value) {
+        // 更新时发送 UserUpdate 模型的字段
+        const updatePayload = {
+          real_name: payload.real_name || null,
+          email: payload.email || null,
+          phone: payload.phone || null,
+          role: payload.role,
+          status: payload.status
+        }
+        if (payload.password) {
+          updatePayload.password = payload.password
+        }
+        await api.put(`/users/${currentUser.value.id}/`, updatePayload)
+        ElMessage.success('更新成功')
+      } else {
+        // 创建时发送 UserCreate 模型的字段
+        const createPayload = {
+          username: payload.username,
+          password: payload.password,
+          real_name: payload.real_name || null,
+          email: payload.email || null,
+          phone: payload.phone || null
+        }
+        await api.post('/users/', createPayload)
+        ElMessage.success('创建成功')
+      }
+
+      dialogVisible.value = false
+      fetchUsers()
+    } catch (error) {
+      ElMessage.error(error.response?.data?.detail || '操作失败')
+    } finally {
+      submitting.value = false
     }
-    
-    // Fetch users on component mount
+  })
+}
+
+const deleteUser = async (row) => {
+  try {
+    await ElMessageBox.confirm(`确定删除用户 "${row.username}" 吗？`, '提示', {
+      type: 'warning'
+    })
+
+    await api.delete(`/users/${row.id}/`)
+    ElMessage.success('删除成功')
     fetchUsers()
-    
-    return {
-      users,
-      loading,
-      error,
-      fetchUsers
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error('删除失败')
     }
   }
 }
+
+const managePermissions = async (row) => {
+  currentUser.value = row
+  try {
+    const { data } = await api.get(`/users/${row.id}/permissions/`)
+    Object.assign(permissions, data)
+    permissionDialogVisible.value = true
+  } catch (error) {
+    ElMessage.error('获取权限失败')
+  }
+}
+
+const savePermissions = async () => {
+  submitting.value = true
+  try {
+    await api.put(`/users/${currentUser.value.id}/permissions/`, permissions)
+    ElMessage.success('权限更新成功')
+    permissionDialogVisible.value = false
+  } catch (error) {
+    ElMessage.error('权限更新失败')
+  } finally {
+    submitting.value = false
+  }
+}
+
+const loadAvailableResources = async () => {
+  try {
+    const [expertsRes, mcpRes] = await Promise.all([
+      api.get('/ai/experts/', { params: { page: 1, page_size: 100 } }),
+      api.get('/mcp/', { params: { page: 1, page_size: 100 } })
+    ])
+    availableExperts.value = expertsRes.data.items
+    availableMCPs.value = mcpRes.data.items
+  } catch (error) {
+    console.error('加载资源失败', error)
+  }
+}
+
+onMounted(() => {
+  fetchUsers()
+  loadAvailableResources()
+})
 </script>
 
 <style scoped>
-* {
-  box-sizing: border-box;
+.users-container {
+  padding: 0;
 }
 
-.users {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 40px 20px;
-  animation: fadeIn 0.6s ease-out;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-h1 {
-  font-size: 32px;
-  font-weight: 700;
-  margin: 0 0 32px 0;
-  background: linear-gradient(135deg, #1E3C72 0%, #2A5298 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-.loading,
-.error {
-  background: white;
-  padding: 60px 40px;
-  border-radius: 12px;
-  text-align: center;
-  font-size: 18px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-  animation: slideUp 0.5s ease-out both;
-}
-
-.error {
-  background: linear-gradient(135deg, #fff5f5 0%, #ffe0e0 100%);
-  color: #c53030;
-  border: 1.5px solid #fc8181;
-}
-
-.loading {
-  color: #666;
-}
-
-.user-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 24px;
-  margin: 32px 0;
-  animation: slideUp 0.5s ease-out 0.1s both;
-}
-
-@keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.user-card {
-  background: white;
-  border-radius: 12px;
-  padding: 24px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  border: 1px solid transparent;
-  position: relative;
-  overflow: hidden;
-}
-
-.user-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 4px;
-  background: linear-gradient(90deg, #1E3C72 0%, #2A5298 100%);
-}
-
-.user-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(30, 60, 114, 0.15);
-  border-color: #1E3C72;
-}
-
-.user-card h3 {
-  margin: 0 0 12px 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: #333;
-}
-
-.user-card p {
-  margin: 0 0 12px 0;
-  color: #666;
-  font-size: 14px;
-  word-break: break-all;
-}
-
-.user-card small {
-  display: block;
-  color: #999;
-  font-size: 12px;
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid #f0f0f0;
-}
-
-.btn {
-  background: linear-gradient(135deg, #1E3C72 0%, #2A5298 100%);
-  color: white;
-  border: none;
-  padding: 12px 28px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 4px 15px rgba(30, 60, 114, 0.4);
-  display: inline-flex;
+.page-header {
+  display: flex;
+  justify-content: space-between;
   align-items: center;
-  gap: 8px;
+  margin-bottom: 24px;
 }
 
-.btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(30, 60, 114, 0.6);
+.header-content h1 {
+  font-size: 30px !important;
+  font-weight: 700 !important;
+  margin: 0 0 8px 0;
+  color: var(--el-text-color-primary);
 }
 
-.btn:active {
-  transform: translateY(0);
+.subtitle {
+  color: var(--el-text-color-secondary);
+  font-size: 14px;
+  margin: 0;
 }
 
-.btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none !important;
+.search-card {
+  margin-bottom: 20px;
 }
 
-@media (max-width: 768px) {
-  .users {
-    padding: 24px 16px;
-  }
+.table-card {
+  min-height: 400px;
+}
 
-  h1 {
-    font-size: 24px;
-    margin-bottom: 24px;
-  }
-
-  .user-list {
-    grid-template-columns: 1fr;
-    gap: 16px;
-    margin: 24px 0;
-  }
-
-  .user-card {
-    padding: 20px;
-  }
-
-  .btn {
-    width: 100%;
-    justify-content: center;
-  }
+:deep(.el-checkbox) {
+  display: block;
+  margin: 8px 0;
 }
 </style>
