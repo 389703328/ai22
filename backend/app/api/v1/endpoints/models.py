@@ -5,6 +5,7 @@ from typing import Optional
 
 from app.core.database import get_db
 from app.db.models import ModelConfigORM
+from app.services.permission_service import filter_query_by_user_permissions, has_user_permission
 from app.models.model_config import (
     ModelConfigCreate,
     ModelConfigUpdate,
@@ -22,6 +23,7 @@ async def list_model_configs(
     keyword: Optional[str] = Query(None),
     provider: Optional[str] = Query(None),
     enabled: Optional[bool] = Query(None),
+    user_id: Optional[int] = Query(None, description="按用户权限过滤"),
     db: AsyncSession = Depends(get_db),
 ):
     """获取模型配置列表"""
@@ -40,6 +42,13 @@ async def list_model_configs(
 
     if enabled is not None:
         query = query.where(ModelConfigORM.enabled == enabled)
+
+    try:
+        query = await filter_query_by_user_permissions(
+            db, query, user_id, "model", ModelConfigORM.id
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
     count_query = select(func.count()).select_from(query.subquery())
     total = await db.scalar(count_query)
@@ -68,6 +77,29 @@ async def get_model_config(config_id: int, db: AsyncSession = Depends(get_db)):
     config = result.scalar_one_or_none()
     if not config:
         raise HTTPException(status_code=404, detail="模型配置不存在")
+    return config
+
+
+@router.get("/{config_id}/by-user", response_model=ModelConfigResponse)
+async def get_model_config_for_user(
+    config_id: int,
+    user_id: int = Query(..., description="用户ID"),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取用户有权限的模型配置详情"""
+    result = await db.execute(
+        select(ModelConfigORM).where(ModelConfigORM.id == config_id)
+    )
+    config = result.scalar_one_or_none()
+    if not config:
+        raise HTTPException(status_code=404, detail="模型配置不存在")
+
+    try:
+        allowed = await has_user_permission(db, user_id, "model", config_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    if not allowed:
+        raise HTTPException(status_code=403, detail="无权限访问该模型配置")
     return config
 
 

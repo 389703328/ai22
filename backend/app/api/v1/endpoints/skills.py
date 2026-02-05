@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.db.models import AIExpertORM, SkillBaseORM, SkillItemORM
+from app.services.permission_service import filter_query_by_user_permissions, has_user_permission
 from app.models.skill import (
     SkillBaseUpdate,
     SkillBaseResponse,
@@ -90,17 +91,34 @@ async def update_skill_base(
 @router.get("/experts/{expert_id}/skills")
 async def list_skill_items(
     expert_id: int,
+    user_id: int | None = Query(None, description="按用户权限过滤"),
     db: AsyncSession = Depends(get_db),
 ):
     """获取技能库条目列表"""
 
     try:
         base = await _get_or_create_skill_base(db, expert_id)
-        result = await db.execute(
+        query = (
             select(SkillItemORM)
             .where(SkillItemORM.skill_base_id == base.id)
             .order_by(SkillItemORM.id.desc())
         )
+
+        if user_id is not None:
+            try:
+                has_expert_access = await has_user_permission(db, user_id, "expert", expert_id)
+            except ValueError as e:
+                return _error(str(e), status_code=404)
+
+            if not has_expert_access:
+                try:
+                    query = await filter_query_by_user_permissions(
+                        db, query, user_id, "skill", SkillItemORM.id
+                    )
+                except ValueError as e:
+                    return _error(str(e), status_code=404)
+
+        result = await db.execute(query)
         items = result.scalars().all()
         data = [SkillItemResponse.model_validate(item).model_dump() for item in items]
         return _success(data)
@@ -156,6 +174,37 @@ async def get_skill_item(
         item = result.scalar_one_or_none()
         if not item:
             return _error("技能条目不存在", status_code=404)
+        return _success(SkillItemResponse.model_validate(item).model_dump())
+    except ValueError as e:
+        return _error(str(e), status_code=404)
+
+
+@router.get("/experts/{expert_id}/skills/{item_id}/by-user")
+async def get_skill_item_for_user(
+    expert_id: int,
+    item_id: int,
+    user_id: int = Query(..., description="用户ID"),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取用户有权限的技能条目详情"""
+    try:
+        base = await _get_or_create_skill_base(db, expert_id)
+        result = await db.execute(
+            select(SkillItemORM).where(
+                SkillItemORM.id == item_id,
+                SkillItemORM.skill_base_id == base.id,
+            )
+        )
+        item = result.scalar_one_or_none()
+        if not item:
+            return _error("技能条目不存在", status_code=404)
+
+        has_expert_access = await has_user_permission(db, user_id, "expert", expert_id)
+        if not has_expert_access:
+            has_item_access = await has_user_permission(db, user_id, "skill", item_id)
+            if not has_item_access:
+                return _error("无权限访问该技能条目", status_code=403)
+
         return _success(SkillItemResponse.model_validate(item).model_dump())
     except ValueError as e:
         return _error(str(e), status_code=404)

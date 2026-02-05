@@ -6,7 +6,11 @@ from sqlalchemy import or_, select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.db.models import AIExpertORM, KnowledgeBaseORM, SkillBaseORM, SubAgentORM
+from app.db.models import AIExpertORM, KnowledgeBaseORM, SkillBaseORM, QuestionBaseORM, SubAgentORM
+from app.services.permission_service import (
+    filter_query_by_user_permissions,
+    has_user_permission,
+)
 from app.models.ai_expert import (
     AIExpertCreate,
     AIExpertUpdate,
@@ -46,6 +50,7 @@ async def list_experts(
     keyword: Optional[str] = Query(None, description="搜索关键词(名称或编码)"),
     status: Optional[str] = Query(None, description="状态筛选(active/inactive/draft)"),
     category: Optional[str] = Query(None, description="分类筛选"),
+    user_id: Optional[int] = Query(None, description="按用户权限过滤"),
     db: AsyncSession = Depends(get_db),
 ):
     """获取AI专家列表（支持分页、搜索、筛选）"""
@@ -64,6 +69,13 @@ async def list_experts(
 
     if category:
         query = query.where(AIExpertORM.category == category)
+
+    try:
+        query = await filter_query_by_user_permissions(
+            db, query, user_id, "expert", AIExpertORM.id
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
     count_query = select(func.count()).select_from(query.subquery())
     total = await db.scalar(count_query)
@@ -105,6 +117,27 @@ async def get_expert(expert_id: int, db: AsyncSession = Depends(get_db)):
     return expert
 
 
+@router.get("/experts/{expert_id}/by-user", response_model=AIExpertResponse)
+async def get_expert_for_user(
+    expert_id: int,
+    user_id: int = Query(..., description="用户ID"),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取用户有权限的AI专家详情"""
+    result = await db.execute(select(AIExpertORM).where(AIExpertORM.id == expert_id))
+    expert = result.scalar_one_or_none()
+    if not expert:
+        raise HTTPException(status_code=404, detail=f"AI专家 ID {expert_id} 不存在")
+
+    try:
+        allowed = await has_user_permission(db, user_id, "expert", expert_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    if not allowed:
+        raise HTTPException(status_code=403, detail="无权限访问该专家")
+    return expert
+
+
 @router.post("/experts/", response_model=AIExpertResponse)
 async def create_expert(expert: AIExpertCreate, db: AsyncSession = Depends(get_db)):
     """创建新的AI专家"""
@@ -137,8 +170,14 @@ async def create_expert(expert: AIExpertCreate, db: AsyncSession = Depends(get_d
         name=f"{new_expert.name}技能库",
         description="",
     )
+    question_base = QuestionBaseORM(
+        expert_id=new_expert.id,
+        name=f"{new_expert.name}问题库",
+        description="",
+    )
     db.add(knowledge_base)
     db.add(skill_base)
+    db.add(question_base)
     await db.commit()
 
     return new_expert
@@ -215,12 +254,37 @@ async def update_expert_status(
 @router.get("/experts/{expert_id}/sub-agents/", response_model=SubAgentListResponse)
 async def list_sub_agents(expert_id: int, db: AsyncSession = Depends(get_db)):
     """获取子智能体列表"""
-
     result = await db.execute(
         select(SubAgentORM)
         .where(SubAgentORM.expert_id == expert_id)
         .order_by(SubAgentORM.id.desc())
     )
+    items = result.scalars().all()
+    return SubAgentListResponse(total=len(items), items=items)
+
+
+@router.get("/experts/{expert_id}/sub-agents/by-user", response_model=SubAgentListResponse)
+async def list_sub_agents_for_user(
+    expert_id: int,
+    user_id: int = Query(..., description="用户ID"),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取用户有权限的子智能体列表"""
+    try:
+        has_expert_access = await has_user_permission(db, user_id, "expert", expert_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+    query = select(SubAgentORM).where(SubAgentORM.expert_id == expert_id)
+    if not has_expert_access:
+        try:
+            query = await filter_query_by_user_permissions(
+                db, query, user_id, "subagent", SubAgentORM.id
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+
+    result = await db.execute(query.order_by(SubAgentORM.id.desc()))
     items = result.scalars().all()
     return SubAgentListResponse(total=len(items), items=items)
 

@@ -78,4 +78,6 @@ class UserPermissionUpdate(BaseModel):
     mcp_ids: Optional[list[int]] = None
     skill_ids: Optional[list[int]] = None
     knowledge_ids: Optional[list[int]] = None
+    model_ids: Optional[list[int]] = None
+    knowledge_graph_ids: Optional[list[int]] = None
 

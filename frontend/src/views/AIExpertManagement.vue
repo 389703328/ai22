@@ -62,15 +62,15 @@
 
     <!-- 数据表格 -->
     <el-card class="table-card" shadow="never">
-      <el-table v-loading="loading" :data="experts" border stripe>
+      <el-table v-loading="loading" :data="experts" border stripe style="width: 100%">
         <el-table-column type="index" label="序号" width="80" />
-        <el-table-column prop="code" label="编码" width="150">
+        <el-table-column prop="code" label="编码" min-width="150">
           <template #default="{ row }">
             <el-tag type="info" size="small">{{ row.code }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="name" label="名称" width="180" show-overflow-tooltip />
-        <el-table-column prop="category" label="分类" width="120">
+        <el-table-column prop="name" label="名称" min-width="180" show-overflow-tooltip />
+        <el-table-column prop="category" label="分类" min-width="120">
           <template #default="{ row }">
             <el-tag v-if="row.category" effect="plain" size="small">{{ row.category }}</el-tag>
             <span v-else>-</span>
@@ -85,10 +85,10 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="version" label="版本" width="100" />
-        <el-table-column prop="usage_count" label="使用次数" width="120" sortable />
-        <el-table-column prop="created_by" label="创建人" width="120" />
-        <el-table-column prop="created_time" label="创建时间" width="180">
+        <el-table-column prop="version" label="版本" min-width="100" />
+        <el-table-column prop="usage_count" label="使用次数" min-width="120" sortable />
+        <el-table-column prop="created_by" label="创建人" min-width="120" />
+        <el-table-column prop="created_time" label="创建时间" min-width="180">
           <template #default="{ row }">
             {{ formatDate(row.created_time) }}
           </template>

@@ -6,26 +6,58 @@ This document provides essential information for AI agents working on this FastA
 
 ```
 ai22/
-├── backend/                 # FastAPI Backend
+├── backend/                 # FastAPI Backend (Standard Architecture)
 │   ├── app/
 │   │   ├── main.py         # Application entry point
 │   │   ├── config.py       # Configuration management
-│   │   ├── models/         # Pydantic models
-│   │   ├── api/v1/         # API routes
-│   │   ├── core/           # Core utilities (database, security)
-│   │   ├── services/       # Business logic
-│   │   └── db/             # Database models
+│   │   ├── core/           # Core configuration and global components
+│   │   │   ├── config.py   # Environment config
+│   │   │   ├── security.py # JWT, password hashing, auth logic
+│   │   │   ├── database.py # Engine, SessionLocal, async session factory
+│   │   │   ├── deps.py     # FastAPI dependency injection items
+│   │   │   └── exceptions.py # Custom exception classes and handlers
+│   │   ├── api/
+│   │   │   └── v1/
+│   │   │       ├── api.py  # APIRouter aggregation and mounting
+│   │   │       └── endpoints/ # Endpoint handlers
+│   │   ├── models/         # SQLAlchemy ORM Models
+│   │   │   ├── base.py     # Base model with common fields
+│   │   │   └── {entity}.py # Entity models
+│   │   ├── schemas/        # Pydantic schemas for validation
+│   │   │   └── {entity}.py # Request/Response DTOs
+│   │   ├── services/       # Business logic layer
+│   │   │   └── {entity}_service.py # Complex logic, cross-table operations
+│   │   ├── repositories/   # Data access layer
+│   │   │   └── {entity}_repo.py # Pure CRUD operations, queries
+│   │   ├── utils/          # Utility functions
+│   │   │   └── helpers.py  # Date conversion, string processing, validation
+│   │   └── middleware/     # Custom middleware (optional)
 │   ├── requirements.txt    # Python dependencies
 │   └── pyproject.toml      # Project metadata
-├── frontend/               # Vue 3 Frontend
+├── frontend/               # Vue 3 Frontend (Standard Architecture)
 │   ├── src/
-│   │   ├── views/          # Page components
-│   │   ├── stores/         # Pinia state management
-│   │   ├── services/       # API services
+│   │   ├── main.ts         # App entry (TypeScript)
+│   │   ├── api/            # API client layer
+│   │   │   ├── http.ts     # Axios instance, interceptors
+│   │   │   ├── index.ts    # API module exports
+│   │   │   └── {entity}.api.ts # API calls per domain
+│   │   ├── components/     # Global reusable components
+│   │   │   ├── base/       # Buttons, Modals, Inputs
+│   │   │   └── layout/     # Layout-related components
+│   │   ├── composables/    # Reusable Composition API logic
+│   │   │   └── use{Feature}.ts
+│   │   ├── views/          # Page-level components (route targets)
+│   │   │   └── {Entity}View.vue
+│   │   ├── stores/         # Pinia stores
+│   │   │   └── {entity}.store.ts
+│   │   ├── types/          # Shared TypeScript types
+│   │   │   └── {entity}.ts
+│   │   ├── utils/          # Utility helpers
 │   │   ├── styles/         # Global CSS (modern design system)
 │   │   └── router/         # Vue Router config
 │   ├── package.json       # NPM dependencies
-│   └── vite.config.js      # Vite build config
+│   ├── vite.config.ts      # Vite build config (TypeScript)
+│   └── tsconfig.json       # TypeScript configuration
 ├── nginx/                  # Nginx configuration
 └── docker-compose.yml      # Multi-container setup
 ```
@@ -63,6 +95,12 @@ npm run preview
 
 # Install dependencies
 npm install
+
+# Type checking (TypeScript)
+npm run type-check
+
+# Linting (if configured)
+npm run lint
 ```
 
 ### Docker Commands
@@ -147,7 +185,7 @@ if not user:
 - Use dependency injection for database sessions
 - Pydantic models in `app/models/` for API contracts
 
-### Frontend (Vue 3)
+### Frontend (Vue 3 + TypeScript)
 
 #### Vue Component Structure
 ```vue
@@ -155,20 +193,18 @@ if not user:
   <!-- Template content -->
 </template>
 
-<script>
-// Use Composition API with <script setup> when possible
+<script setup lang="ts">
+// Use Composition API with TypeScript
 import { ref, computed, onMounted } from 'vue'
-import { useUserStore } from '../stores/user.js'
+import { useUserStore } from '../stores/user.store.ts'
+import type { User } from '@/types/user.ts'
 
-export default {
-  name: 'ComponentName',
-  setup() {
-    // Reactive state and methods
-    return {
-      // Expose to template
-    }
-  }
-}
+// Reactive state and methods
+const store = useUserStore()
+const loading = ref(false)
+const user = ref<User | null>(null)
+
+// Expose to template
 </script>
 
 <style scoped>
@@ -185,15 +221,16 @@ import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
 
 // Local imports last
-import { useUserStore } from '../stores/user.js'
+import { useUserStore } from '../stores/user.store.ts'
 import api from '../services/api.js'
 ```
 
 #### Naming Conventions
 - **Components**: `PascalCase.vue` (e.g., `UserProfile.vue`)
-- **Files**: `kebab-case.js` for utilities, `PascalCase.vue` for components
+- **Files**: `kebab-case.js` for utilities, `PascalCase.vue` for components, `.ts` for TypeScript
 - **Variables/Functions**: `camelCase` (e.g., `userName`, `fetchUsers()`)
 - **CSS Classes**: `kebab-case` (e.g., `user-card`, `loading-spinner`)
+- **Types**: `PascalCase` (e.g., `User`, `UserCreate`)
 
 #### State Management
 - Use Pinia for state management
@@ -222,28 +259,28 @@ export const useUserStore = defineStore('user', () => {
 ```
 
 #### API Integration
-- Use centralized API service in `src/services/api.js`
+- Use centralized API service in `src/api/http.ts`
 - Axios instance with proper timeout and headers
 - Error handling in store methods, not components
 - Example:
-```javascript
-// services/api.js
+```typescript
+// api/http.ts
 import axios from 'axios'
 
-const api = axios.create({
+const http = axios.create({
   baseURL: '/api/v1',
   timeout: 10000,
   headers: { 'Content-Type': 'application/json' }
 })
 
-export default api
+export default http
 
 // In store
-import api from '../services/api.js'
+import { userApi } from '@/api'
 
 const fetchUsers = async () => {
-  const response = await api.get('/users')
-  users.value = response.data
+  const response = await userApi.getUsers()
+  users.value = response.items
 }
 ```
 
@@ -318,6 +355,31 @@ DATABASE_URL="postgresql+psycopg://postgres:postgres@localhost:5432/ai22"
     - 专家详情页新增"知识图谱"标签页
     - 专家列表新增"创建人"列
   - **数据库驱动**: 从 `psycopg` 切换至 `asyncpg`，全异步查询优化
+
+### 2026-02-05
+- **专家问题库**: 新增专家问题库表结构与CRUD接口
+- **子智能体会话库**: 新增会话库表结构与CRUD接口，支持点赞/踩与评论
+- **前端增强**: 专家详情页新增问题库标签页与子智能体会话库管理入口
+
+### 2026-02-05 (Project Restructure)
+- **后端架构重构**: 按照FastAPI标准架构调整代码结构
+  - 新增 `schemas/`, `repositories/`, `utils/`, `middleware/` 目录
+  - 新增 `core/deps.py` 依赖注入配置
+  - 新增 `core/exceptions.py` 异常处理
+  - 新增 `models/base.py` 基础模型
+  - 创建示例 `schemas/user.py`, `repositories/user_repo.py`, `services/user_service.py`
+- **前端架构重构**: 按照Vue 3 + TypeScript标准架构调整
+  - 迁移至TypeScript (从JavaScript)
+  - 新增 `api/`, `types/`, `composables/`, `components/base/`, `components/layout/` 目录
+  - 创建 `api/http.ts` HTTP客户端配置
+  - 创建 `api/user.api.ts` 用户API模块
+  - 创建 `stores/user.store.ts` Pinia状态管理
+  - 创建 `types/user.ts`, `types/common.ts` TypeScript类型定义
+  - 创建 `composables/usePagination.ts` 可复用逻辑
+- **代码清理**: 删除冗余文件和缓存
+  - 删除 `__pycache__` 目录
+  - 删除临时迁移脚本 `migrate_question_session.py`, `migrate_file_fields.py`
+- **标准化**: 统一代码风格和架构模式，符合skill规范要求
 
 ### 2026-02-03 (Earlier)
 - **Frontend Refactor**: Standardized `AIExpertManagement.vue` and `AIExpertDetail.vue` to use **Element Plus** components (Tabs, Dialogs, Tables, Forms) instead of custom CSS components, ensuring consistency with the project's frontend stack requirements.
@@ -418,3 +480,7 @@ DATABASE_URL="postgresql+psycopg://postgres:postgres@localhost:5432/ai22"
 - [Pinia Documentation](https://pinia.vuejs.org/)
 - [Vite Documentation](https://vitejs.dev/)
 - [Element Plus UI](https://element-plus.org/)
+
+## 🧾 变更记录
+
+- 2026-02-04：专家详情知识库新增左侧目录与子智能体入口，支持按子智能体区分知识条目并在保存时记录归属；后端知识条目支持可选 `sub_agent_id` 字段与过滤参数。

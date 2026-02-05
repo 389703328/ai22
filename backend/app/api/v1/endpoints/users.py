@@ -1,11 +1,11 @@
 from fastapi import APIRouter, HTTPException, Depends, Query
-from sqlalchemy import select, func, or_
+from sqlalchemy import select, func, or_, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 from passlib.context import CryptContext
 
 from app.core.database import get_db
-from app.db.models import UserORM
+from app.db.models import UserORM, UserResourcePermissionORM
 from app.models.user import (
     UserCreate,
     UserUpdate,
@@ -16,6 +16,16 @@ from app.models.user import (
 
 router = APIRouter()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+RESOURCE_TYPE_MAP = {
+    "expert": "expert_ids",
+    "subagent": "subagent_ids",
+    "mcp": "mcp_ids",
+    "skill": "skill_ids",
+    "knowledge": "knowledge_ids",
+    "model": "model_ids",
+    "knowledge_graph": "knowledge_graph_ids",
+}
 
 
 def hash_password(password: str) -> str:
@@ -158,13 +168,17 @@ async def get_user_permissions(user_id: int, db: AsyncSession = Depends(get_db))
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
 
-    return {
-        "expert_ids": [e.id for e in user.permitted_experts],
-        "subagent_ids": [s.id for s in user.permitted_subagents],
-        "mcp_ids": [m.id for m in user.permitted_mcps],
-        "skill_ids": [s.id for s in user.permitted_skills],
-        "knowledge_ids": [k.id for k in user.permitted_knowledge],
-    }
+    permissions = {key: [] for key in RESOURCE_TYPE_MAP.values()}
+    result = await db.execute(
+        select(UserResourcePermissionORM).where(UserResourcePermissionORM.user_id == user_id)
+    )
+    rows = result.scalars().all()
+    for row in rows:
+        field_name = RESOURCE_TYPE_MAP.get(row.resource_type)
+        if field_name is not None:
+            permissions[field_name].append(row.resource_id)
+
+    return permissions
 
 
 @router.put("/{user_id}/permissions")
@@ -177,7 +191,32 @@ async def update_user_permissions(
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
 
-    # 这里需要加载关系并更新，暂时返回成功
-    # 实际实现需要查询并设置关系
+    update_data = permissions.model_dump(exclude_unset=True)
+
+    for resource_type, field_name in RESOURCE_TYPE_MAP.items():
+        if field_name not in update_data:
+            continue
+        resource_ids = update_data.get(field_name) or []
+
+        await db.execute(
+            delete(UserResourcePermissionORM).where(
+                UserResourcePermissionORM.user_id == user_id,
+                UserResourcePermissionORM.resource_type == resource_type,
+            )
+        )
+
+        new_rows = [
+            UserResourcePermissionORM(
+                user_id=user_id,
+                resource_type=resource_type,
+                resource_id=resource_id,
+                permission_level="read",
+            )
+            for resource_id in resource_ids
+        ]
+        if new_rows:
+            db.add_all(new_rows)
+
+    await db.commit()
     return {"message": "权限更新成功", "user_id": user_id}
 

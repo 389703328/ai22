@@ -9,13 +9,23 @@
     </div>
 
     <!-- 搜索筛选 -->
-    <el-card class="search-card" shadow="never">
-      <el-form :inline="true">
+    <el-card class="filter-card" shadow="hover">
+      <el-form :inline="true" class="search-form">
         <el-form-item label="关键词">
-          <el-input v-model="searchParams.keyword" placeholder="模型名称" clearable @clear="fetchModels" />
+          <el-input
+            v-model="searchParams.keyword"
+            placeholder="模型名称"
+            clearable
+            @input="handleSearchInput"
+            style="width: 240px"
+          >
+            <template #prefix>
+              <el-icon><Search /></el-icon>
+            </template>
+          </el-input>
         </el-form-item>
         <el-form-item label="提供商">
-          <el-select v-model="searchParams.provider" placeholder="全部" clearable @change="fetchModels">
+          <el-select v-model="searchParams.provider" placeholder="全部" clearable @change="handleFilterChange" style="width: 160px">
             <el-option label="OpenAI" value="openai" />
             <el-option label="Anthropic" value="anthropic" />
             <el-option label="Ollama" value="ollama" />
@@ -23,35 +33,38 @@
           </el-select>
         </el-form-item>
         <el-form-item label="状态">
-          <el-select v-model="searchParams.enabled" placeholder="全部" clearable @change="fetchModels">
+          <el-select v-model="searchParams.enabled" placeholder="全部" clearable @change="handleFilterChange" style="width: 140px">
             <el-option label="启用" :value="true" />
             <el-option label="禁用" :value="false" />
           </el-select>
         </el-form-item>
-        <el-form-item>
-          <el-button type="primary" @click="fetchModels">搜索</el-button>
+        <el-form-item class="filter-actions">
+          <el-button @click="handleReset">重置</el-button>
+          <el-button type="primary" plain @click="handleRefresh" :loading="loading">
+            <el-icon class="el-icon--left"><Refresh /></el-icon>刷新
+          </el-button>
         </el-form-item>
       </el-form>
     </el-card>
 
     <!-- 模型表格 -->
     <el-card class="table-card" shadow="never">
-      <el-table v-loading="loading" :data="models" border stripe>
+      <el-table v-loading="loading" :data="models" border stripe style="width: 100%">
         <el-table-column type="index" label="序号" width="80" />
-        <el-table-column prop="name" label="名称" width="180" />
-        <el-table-column label="提供商" width="120">
+        <el-table-column prop="name" label="名称" min-width="180" />
+        <el-table-column label="提供商" min-width="120">
           <template #default="{ row }">
             <el-tag>{{ providerMap[row.provider] || row.provider }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="model_name" label="模型" width="200" />
+        <el-table-column prop="model_name" label="模型" min-width="200" />
         <el-table-column prop="base_url" label="Base URL" min-width="200" show-overflow-tooltip />
         <el-table-column label="温度" width="100">
           <template #default="{ row }">
             {{ (row.temperature / 100).toFixed(2) }}
           </template>
         </el-table-column>
-        <el-table-column prop="max_tokens" label="最大Token" width="120" />
+        <el-table-column prop="max_tokens" label="最大Token" min-width="120" />
         <el-table-column label="状态" width="100">
           <template #default="{ row }">
             <el-tag :type="row.enabled ? 'success' : 'info'">
@@ -133,6 +146,7 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Search, Refresh } from '@element-plus/icons-vue'
 import api from '../services/api.js'
 
 const loading = ref(false)
@@ -142,6 +156,7 @@ const dialogVisible = ref(false)
 const isEdit = ref(false)
 const formRef = ref(null)
 const currentModel = ref(null)
+const searchTimeout = ref(null)
 
 const providerMap = {
   openai: 'OpenAI',
@@ -199,6 +214,31 @@ const fetchModels = async () => {
   } finally {
     loading.value = false
   }
+}
+
+const handleSearchInput = () => {
+  clearTimeout(searchTimeout.value)
+  searchTimeout.value = setTimeout(() => {
+    pagination.page = 1
+    fetchModels()
+  }, 500)
+}
+
+const handleFilterChange = () => {
+  pagination.page = 1
+  fetchModels()
+}
+
+const handleReset = () => {
+  searchParams.keyword = ''
+  searchParams.provider = ''
+  searchParams.enabled = null
+  pagination.page = 1
+  fetchModels()
+}
+
+const handleRefresh = () => {
+  fetchModels()
 }
 
 const showCreateDialog = () => {
@@ -325,8 +365,18 @@ onMounted(() => {
   margin: 0;
 }
 
-.search-card {
-  margin-bottom: 20px;
+.filter-card {
+  margin-bottom: 24px;
+}
+
+.filter-actions {
+  margin-left: auto;
+}
+
+.search-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
 .table-card {

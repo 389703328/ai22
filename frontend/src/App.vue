@@ -235,8 +235,7 @@ const currentRouteName = computed(() => {
 .main-content-wrapper {
   flex: 1;
   padding: var(--space-6);
-  max-width: 1400px;
-  width: 100%;
+  width: 96%;
   margin: 0 auto;
 }
 

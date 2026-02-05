@@ -15,7 +15,7 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 def get_upload_path(upload_type: str) -> Path:
     """获取特定类型的上传目录"""
     path = UPLOAD_DIR / upload_type
-    path.mkdir(exist_ok=True)
+    path.mkdir(exist_ok=True, parents=True)
     return path
 
 
@@ -26,8 +26,10 @@ def save_uploaded_file(file: UploadFile, upload_type: str) -> tuple[str, str]:
     """
     # 生成唯一的文件名
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    file_extension = Path(file.filename).suffix
-    unique_filename = f"{timestamp}_{file.filename}"
+    original_name = file.filename or "upload"
+    safe_name = Path(original_name).name
+    file_extension = Path(safe_name).suffix
+    unique_filename = f"{timestamp}_{Path(safe_name).stem}{file_extension}"
     
     upload_path = get_upload_path(upload_type)
     file_path = upload_path / unique_filename
@@ -38,7 +40,7 @@ def save_uploaded_file(file: UploadFile, upload_type: str) -> tuple[str, str]:
     
     # 返回相对路径和原始文件名
     relative_path = str(file_path.relative_to(UPLOAD_DIR))
-    return relative_path, file.filename
+    return relative_path, safe_name
 
 
 @router.post("/upload/knowledge")
@@ -49,12 +51,13 @@ async def upload_knowledge_file(
     """上传知识库文件"""
     try:
         file_path, original_filename = save_uploaded_file(file, f"knowledge/expert_{expert_id}")
+        size = os.path.getsize(UPLOAD_DIR / file_path)
         return {
             "success": True,
             "data": {
                 "file_path": file_path,
                 "file_name": original_filename,
-                "size": file.size
+                "size": size
             }
         }
     except Exception as e:
@@ -69,12 +72,13 @@ async def upload_skill_file(
     """上传技能文件"""
     try:
         file_path, original_filename = save_uploaded_file(file, f"skills/expert_{expert_id}")
+        size = os.path.getsize(UPLOAD_DIR / file_path)
         return {
             "success": True,
             "data": {
                 "file_path": file_path,
                 "file_name": original_filename,
-                "size": file.size
+                "size": size
             }
         }
     except Exception as e:
@@ -89,12 +93,13 @@ async def upload_knowledge_graph_file(
     """上传知识图谱文件"""
     try:
         file_path, original_filename = save_uploaded_file(file, f"knowledge_graphs/expert_{expert_id}")
+        size = os.path.getsize(UPLOAD_DIR / file_path)
         return {
             "success": True,
             "data": {
                 "file_path": file_path,
                 "file_name": original_filename,
-                "size": file.size
+                "size": size
             }
         }
     except Exception as e:

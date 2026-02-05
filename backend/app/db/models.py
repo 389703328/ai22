@@ -1,46 +1,10 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean, Table
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from sqlalchemy.types import JSON
 
 from app.core.database import Base
 
-
-# 权限关联表
-user_expert_permission = Table(
-    'user_expert_permissions',
-    Base.metadata,
-    Column('user_id', Integer, ForeignKey('users.id'), primary_key=True),
-    Column('expert_id', Integer, ForeignKey('ai_experts.id'), primary_key=True)
-)
-
-user_subagent_permission = Table(
-    'user_subagent_permissions',
-    Base.metadata,
-    Column('user_id', Integer, ForeignKey('users.id'), primary_key=True),
-    Column('subagent_id', Integer, ForeignKey('expert_sub_agents.id'), primary_key=True)
-)
-
-user_mcp_permission = Table(
-    'user_mcp_permissions',
-    Base.metadata,
-    Column('user_id', Integer, ForeignKey('users.id'), primary_key=True),
-    Column('mcp_id', Integer, ForeignKey('mcp_tools.id'), primary_key=True)
-)
-
-user_skill_permission = Table(
-    'user_skill_permissions',
-    Base.metadata,
-    Column('user_id', Integer, ForeignKey('users.id'), primary_key=True),
-    Column('skill_id', Integer, ForeignKey('expert_skill_items.id'), primary_key=True)
-)
-
-user_knowledge_permission = Table(
-    'user_knowledge_permissions',
-    Base.metadata,
-    Column('user_id', Integer, ForeignKey('users.id'), primary_key=True),
-    Column('knowledge_id', Integer, ForeignKey('expert_knowledge_items.id'), primary_key=True)
-)
 
 
 class UserORM(Base):
@@ -59,12 +23,30 @@ class UserORM(Base):
     created_time = Column(DateTime, nullable=False, server_default=func.now())
     updated_time = Column(DateTime, nullable=True, onupdate=func.now())
 
-    # 权限关系
-    permitted_experts = relationship("AIExpertORM", secondary=user_expert_permission, back_populates="permitted_users")
-    permitted_subagents = relationship("SubAgentORM", secondary=user_subagent_permission, back_populates="permitted_users")
-    permitted_mcps = relationship("MCPToolORM", secondary=user_mcp_permission, back_populates="permitted_users")
-    permitted_skills = relationship("SkillItemORM", secondary=user_skill_permission, back_populates="permitted_users")
-    permitted_knowledge = relationship("KnowledgeItemORM", secondary=user_knowledge_permission, back_populates="permitted_users")
+    resource_permissions = relationship(
+        "UserResourcePermissionORM",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+
+
+class UserResourcePermissionORM(Base):
+    """统一资源权限表"""
+
+    __tablename__ = "user_resource_permissions"
+    __table_args__ = (
+        UniqueConstraint("user_id", "resource_type", "resource_id", name="uniq_user_resource_permission"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    resource_type = Column(String(50), nullable=False, index=True)
+    resource_id = Column(Integer, nullable=False, index=True)
+    permission_level = Column(String(20), nullable=False, default="read")
+    granted_by = Column(String(50), nullable=True)
+    created_time = Column(DateTime, nullable=False, server_default=func.now())
+
+    user = relationship("UserORM", back_populates="resource_permissions")
 
 
 class AIExpertORM(Base):
@@ -93,8 +75,8 @@ class AIExpertORM(Base):
 
     knowledge_base = relationship("KnowledgeBaseORM", back_populates="expert", uselist=False, cascade="all, delete-orphan")
     skill_base = relationship("SkillBaseORM", back_populates="expert", uselist=False, cascade="all, delete-orphan")
+    question_base = relationship("QuestionBaseORM", back_populates="expert", uselist=False, cascade="all, delete-orphan")
     knowledge_graphs = relationship("KnowledgeGraphORM", back_populates="expert", cascade="all, delete-orphan")
-    permitted_users = relationship("UserORM", secondary=user_expert_permission, back_populates="permitted_experts")
 
 
 class KnowledgeBaseORM(Base):
@@ -120,8 +102,18 @@ class KnowledgeItemORM(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     knowledge_base_id = Column(Integer, ForeignKey("expert_knowledge_bases.id"), nullable=False, index=True)
+    sub_agent_id = Column(Integer, ForeignKey("expert_sub_agents.id"), nullable=True, index=True)
     title = Column(String(200), nullable=False)
     content = Column(Text, nullable=False)
+    name = Column(String(200), nullable=False)
+    text = Column(Text, nullable=True)
+    indexing_technique = Column(String(50), nullable=True)
+    doc_form = Column(String(50), nullable=True)
+    doc_language = Column(String(50), nullable=True)
+    process_rule = Column(JSON, nullable=True)
+    retrieval_model = Column(JSON, nullable=True)
+    embedding_model = Column(String(100), nullable=True)
+    embedding_model_provider = Column(String(100), nullable=True)
     file_path = Column(String(500), nullable=True)  # 文件路径
     file_name = Column(String(200), nullable=True)  # 文件名
     metadata_json = Column("metadata", JSON, nullable=True)
@@ -130,7 +122,6 @@ class KnowledgeItemORM(Base):
     updated_time = Column(DateTime, nullable=True, onupdate=func.now())
 
     knowledge_base = relationship("KnowledgeBaseORM", back_populates="items")
-    permitted_users = relationship("UserORM", secondary=user_knowledge_permission, back_populates="permitted_knowledge")
 
 
 class SkillBaseORM(Base):
@@ -168,7 +159,41 @@ class SkillItemORM(Base):
     updated_time = Column(DateTime, nullable=True, onupdate=func.now())
 
     skill_base = relationship("SkillBaseORM", back_populates="items")
-    permitted_users = relationship("UserORM", secondary=user_skill_permission, back_populates="permitted_skills")
+
+
+class QuestionBaseORM(Base):
+    """专家问题库"""
+
+    __tablename__ = "expert_question_bases"
+
+    id = Column(Integer, primary_key=True, index=True)
+    expert_id = Column(Integer, ForeignKey("ai_experts.id"), unique=True, nullable=False, index=True)
+    name = Column(String(200), nullable=False)
+    description = Column(Text, nullable=True)
+    created_time = Column(DateTime, nullable=False, server_default=func.now())
+    updated_time = Column(DateTime, nullable=True, onupdate=func.now())
+
+    expert = relationship("AIExpertORM", back_populates="question_base")
+    items = relationship("QuestionItemORM", back_populates="question_base", cascade="all, delete-orphan")
+
+
+class QuestionItemORM(Base):
+    """问题库条目"""
+
+    __tablename__ = "expert_question_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    question_base_id = Column(Integer, ForeignKey("expert_question_bases.id"), nullable=False, index=True)
+    question = Column(Text, nullable=False)
+    answer = Column(Text, nullable=True)
+    category = Column(String(100), nullable=True)
+    tags = Column(JSON, nullable=False, default=list)
+    difficulty = Column(Integer, nullable=True)
+    enabled = Column(Boolean, nullable=False, default=True)
+    created_time = Column(DateTime, nullable=False, server_default=func.now())
+    updated_time = Column(DateTime, nullable=True, onupdate=func.now())
+
+    question_base = relationship("QuestionBaseORM", back_populates="items")
 
 
 class SubAgentORM(Base):
@@ -187,7 +212,27 @@ class SubAgentORM(Base):
     updated_time = Column(DateTime, nullable=True, onupdate=func.now())
 
     expert = relationship("AIExpertORM")
-    permitted_users = relationship("UserORM", secondary=user_subagent_permission, back_populates="permitted_subagents")
+    sessions = relationship("SubAgentSessionORM", back_populates="sub_agent", cascade="all, delete-orphan")
+
+
+class SubAgentSessionORM(Base):
+    """子智能体会话库"""
+
+    __tablename__ = "sub_agent_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    sub_agent_id = Column(Integer, ForeignKey("expert_sub_agents.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    session_id = Column(String(100), nullable=True, index=True)
+    title = Column(String(200), nullable=True)
+    content = Column(Text, nullable=True)
+    feedback_type = Column(String(20), nullable=False, default="none")
+    comment = Column(Text, nullable=True)
+    created_time = Column(DateTime, nullable=False, server_default=func.now())
+    updated_time = Column(DateTime, nullable=True, onupdate=func.now())
+
+    sub_agent = relationship("SubAgentORM", back_populates="sessions")
+    user = relationship("UserORM")
 
 
 class KnowledgeGraphORM(Base):
@@ -229,7 +274,6 @@ class MCPToolORM(Base):
     created_time = Column(DateTime, nullable=False, server_default=func.now())
     updated_time = Column(DateTime, nullable=True, onupdate=func.now())
 
-    permitted_users = relationship("UserORM", secondary=user_mcp_permission, back_populates="permitted_mcps")
 
 
 class ModelConfigORM(Base):

@@ -1,9 +1,10 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.db.models import KnowledgeGraphORM, AIExpertORM
+from app.services.permission_service import filter_query_by_user_permissions, has_user_permission
 from app.models.knowledge_graph import (
     KnowledgeGraphCreate,
     KnowledgeGraphUpdate,
@@ -15,13 +16,33 @@ router = APIRouter()
 
 
 @router.get("/experts/{expert_id}/knowledge-graphs", response_model=KnowledgeGraphListResponse)
-async def list_knowledge_graphs(expert_id: int, db: AsyncSession = Depends(get_db)):
+async def list_knowledge_graphs(
+    expert_id: int,
+    user_id: int | None = Query(None, description="按用户权限过滤"),
+    db: AsyncSession = Depends(get_db),
+):
     """获取专家的知识图谱列表"""
-    result = await db.execute(
+    query = (
         select(KnowledgeGraphORM)
         .where(KnowledgeGraphORM.expert_id == expert_id)
         .order_by(KnowledgeGraphORM.created_time.desc())
     )
+
+    if user_id is not None:
+        try:
+            has_expert_access = await has_user_permission(db, user_id, "expert", expert_id)
+        except ValueError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+
+        if not has_expert_access:
+            try:
+                query = await filter_query_by_user_permissions(
+                    db, query, user_id, "knowledge_graph", KnowledgeGraphORM.id
+                )
+            except ValueError as e:
+                raise HTTPException(status_code=404, detail=str(e))
+
+    result = await db.execute(query)
     items = result.scalars().all()
     return KnowledgeGraphListResponse(total=len(items), items=items)
 
@@ -59,6 +80,39 @@ async def get_knowledge_graph(
     graph = result.scalar_one_or_none()
     if not graph:
         raise HTTPException(status_code=404, detail="知识图谱不存在")
+    return graph
+
+
+@router.get("/experts/{expert_id}/knowledge-graphs/{graph_id}/by-user", response_model=KnowledgeGraphResponse)
+async def get_knowledge_graph_for_user(
+    expert_id: int,
+    graph_id: int,
+    user_id: int = Query(..., description="用户ID"),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取用户有权限的知识图谱详情"""
+    result = await db.execute(
+        select(KnowledgeGraphORM).where(
+            KnowledgeGraphORM.id == graph_id,
+            KnowledgeGraphORM.expert_id == expert_id,
+        )
+    )
+    graph = result.scalar_one_or_none()
+    if not graph:
+        raise HTTPException(status_code=404, detail="知识图谱不存在")
+
+    try:
+        has_expert_access = await has_user_permission(db, user_id, "expert", expert_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+    if not has_expert_access:
+        try:
+            allowed = await has_user_permission(db, user_id, "knowledge_graph", graph_id)
+        except ValueError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+        if not allowed:
+            raise HTTPException(status_code=403, detail="无权限访问该知识图谱")
     return graph
 
 

@@ -9,37 +9,50 @@
     </div>
 
     <!-- 搜索和筛选 -->
-    <el-card class="search-card" shadow="never">
-      <el-form :inline="true">
+    <el-card class="filter-card" shadow="hover">
+      <el-form :inline="true" class="search-form">
         <el-form-item label="关键词">
-          <el-input v-model="searchParams.keyword" placeholder="用户名/邮箱/姓名" clearable @clear="fetchUsers" />
+          <el-input
+            v-model="searchParams.keyword"
+            placeholder="用户名/邮箱/姓名"
+            clearable
+            @input="handleSearchInput"
+            style="width: 240px"
+          >
+            <template #prefix>
+              <el-icon><Search /></el-icon>
+            </template>
+          </el-input>
         </el-form-item>
         <el-form-item label="角色">
-          <el-select v-model="searchParams.role" placeholder="全部" clearable @change="fetchUsers">
+          <el-select v-model="searchParams.role" placeholder="全部" clearable @change="handleFilterChange" style="width: 140px">
             <el-option label="管理员" value="admin" />
             <el-option label="普通用户" value="user" />
           </el-select>
         </el-form-item>
         <el-form-item label="状态">
-          <el-select v-model="searchParams.status" placeholder="全部" clearable @change="fetchUsers">
+          <el-select v-model="searchParams.status" placeholder="全部" clearable @change="handleFilterChange" style="width: 140px">
             <el-option label="启用" value="active" />
             <el-option label="禁用" value="inactive" />
           </el-select>
         </el-form-item>
-        <el-form-item>
-          <el-button type="primary" @click="fetchUsers">搜索</el-button>
+        <el-form-item class="filter-actions">
+          <el-button @click="handleReset">重置</el-button>
+          <el-button type="primary" plain @click="handleRefresh" :loading="loading">
+            <el-icon class="el-icon--left"><Refresh /></el-icon>刷新
+          </el-button>
         </el-form-item>
       </el-form>
     </el-card>
 
     <!-- 用户表格 -->
     <el-card class="table-card" shadow="never">
-      <el-table v-loading="loading" :data="users" border stripe>
+      <el-table v-loading="loading" :data="users" border stripe style="width: 100%">
         <el-table-column type="index" label="序号" width="80" />
-        <el-table-column prop="username" label="用户名" width="150" />
-        <el-table-column prop="real_name" label="真实姓名" width="120" />
-        <el-table-column prop="email" label="邮箱" width="200" />
-        <el-table-column prop="phone" label="手机号" width="130" />
+        <el-table-column prop="username" label="用户名" min-width="150" />
+        <el-table-column prop="real_name" label="真实姓名" min-width="120" />
+        <el-table-column prop="email" label="邮箱" min-width="200" />
+        <el-table-column prop="phone" label="手机号" min-width="130" />
         <el-table-column label="角色" width="100">
           <template #default="{ row }">
             <el-tag :type="row.role === 'admin' ? 'danger' : 'primary'">
@@ -159,6 +172,7 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Search, Refresh } from '@element-plus/icons-vue'
 import api from '../services/api.js'
 
 const loading = ref(false)
@@ -170,6 +184,7 @@ const isEdit = ref(false)
 const formRef = ref(null)
 const activePermissionTab = ref('expert')
 const currentUser = ref(null)
+const searchTimeout = ref(null)
 
 const searchParams = reactive({
   keyword: '',
@@ -237,6 +252,31 @@ const fetchUsers = async () => {
   } finally {
     loading.value = false
   }
+}
+
+const handleSearchInput = () => {
+  clearTimeout(searchTimeout.value)
+  searchTimeout.value = setTimeout(() => {
+    pagination.page = 1
+    fetchUsers()
+  }, 500)
+}
+
+const handleFilterChange = () => {
+  pagination.page = 1
+  fetchUsers()
+}
+
+const handleReset = () => {
+  searchParams.keyword = ''
+  searchParams.role = ''
+  searchParams.status = ''
+  pagination.page = 1
+  fetchUsers()
+}
+
+const handleRefresh = () => {
+  fetchUsers()
 }
 
 const showCreateDialog = () => {
@@ -408,8 +448,18 @@ onMounted(() => {
   margin: 0;
 }
 
-.search-card {
-  margin-bottom: 20px;
+.filter-card {
+  margin-bottom: 24px;
+}
+
+.filter-actions {
+  margin-left: auto;
+}
+
+.search-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
 .table-card {

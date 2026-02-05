@@ -9,33 +9,46 @@
     </div>
 
     <!-- 搜索筛选 -->
-    <el-card class="search-card" shadow="never">
-      <el-form :inline="true">
+    <el-card class="filter-card" shadow="hover">
+      <el-form :inline="true" class="search-form">
         <el-form-item label="关键词">
-          <el-input v-model="searchParams.keyword" placeholder="工具名称/描述" clearable @clear="fetchMCPs" />
+          <el-input
+            v-model="searchParams.keyword"
+            placeholder="工具名称/描述"
+            clearable
+            @input="handleSearchInput"
+            style="width: 240px"
+          >
+            <template #prefix>
+              <el-icon><Search /></el-icon>
+            </template>
+          </el-input>
         </el-form-item>
         <el-form-item label="类型">
-          <el-select v-model="searchParams.tool_type" placeholder="全部" clearable @change="fetchMCPs">
+          <el-select v-model="searchParams.tool_type" placeholder="全部" clearable @change="handleFilterChange" style="width: 140px">
             <el-option label="函数" value="function" />
             <el-option label="API" value="api" />
             <el-option label="集成" value="integration" />
           </el-select>
         </el-form-item>
         <el-form-item label="状态">
-          <el-select v-model="searchParams.enabled" placeholder="全部" clearable @change="fetchMCPs">
+          <el-select v-model="searchParams.enabled" placeholder="全部" clearable @change="handleFilterChange" style="width: 140px">
             <el-option label="启用" :value="true" />
             <el-option label="禁用" :value="false" />
           </el-select>
         </el-form-item>
-        <el-form-item>
-          <el-button type="primary" @click="fetchMCPs">搜索</el-button>
+        <el-form-item class="filter-actions">
+          <el-button @click="handleReset">重置</el-button>
+          <el-button type="primary" plain @click="handleRefresh" :loading="loading">
+            <el-icon class="el-icon--left"><Refresh /></el-icon>刷新
+          </el-button>
         </el-form-item>
       </el-form>
     </el-card>
 
     <!-- MCP表格 -->
     <el-card class="table-card" shadow="never">
-      <el-table v-loading="loading" :data="mcps" border stripe>
+      <el-table v-loading="loading" :data="mcps" border stripe style="width: 100%">
         <el-table-column type="index" label="序号" width="80" />
         <el-table-column label="图标" width="80">
           <template #default="{ row }">
@@ -43,15 +56,15 @@
             <el-avatar v-else :size="40">{{ row.name[0] }}</el-avatar>
           </template>
         </el-table-column>
-        <el-table-column prop="name" label="名称" width="180" />
+        <el-table-column prop="name" label="名称" min-width="180" />
         <el-table-column prop="description" label="描述" min-width="250" show-overflow-tooltip />
-        <el-table-column label="类型" width="120">
+        <el-table-column label="类型" min-width="120">
           <template #default="{ row }">
             <el-tag>{{ typeMap[row.tool_type] || row.tool_type }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="method" label="方法" width="100" />
-        <el-table-column prop="endpoint" label="端点" width="200" show-overflow-tooltip />
+        <el-table-column prop="endpoint" label="端点" min-width="200" show-overflow-tooltip />
         <el-table-column label="状态" width="100">
           <template #default="{ row }">
             <el-tag :type="row.enabled ? 'success' : 'info'">
@@ -133,6 +146,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Search, Refresh } from '@element-plus/icons-vue'
 import api from '../services/api.js'
 
 const loading = ref(false)
@@ -142,6 +156,7 @@ const dialogVisible = ref(false)
 const isEdit = ref(false)
 const formRef = ref(null)
 const currentMCP = ref(null)
+const searchTimeout = ref(null)
 
 const typeMap = {
   function: '函数',
@@ -196,6 +211,31 @@ const fetchMCPs = async () => {
   } finally {
     loading.value = false
   }
+}
+
+const handleSearchInput = () => {
+  clearTimeout(searchTimeout.value)
+  searchTimeout.value = setTimeout(() => {
+    pagination.page = 1
+    fetchMCPs()
+  }, 500)
+}
+
+const handleFilterChange = () => {
+  pagination.page = 1
+  fetchMCPs()
+}
+
+const handleReset = () => {
+  searchParams.keyword = ''
+  searchParams.tool_type = ''
+  searchParams.enabled = null
+  pagination.page = 1
+  fetchMCPs()
+}
+
+const handleRefresh = () => {
+  fetchMCPs()
 }
 
 const showCreateDialog = () => {
@@ -320,8 +360,18 @@ onMounted(() => {
   margin: 0;
 }
 
-.search-card {
-  margin-bottom: 20px;
+.filter-card {
+  margin-bottom: 24px;
+}
+
+.filter-actions {
+  margin-left: auto;
+}
+
+.search-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
 .table-card {
